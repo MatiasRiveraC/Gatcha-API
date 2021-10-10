@@ -85,18 +85,19 @@ def addFriend():
 
     return jsonify({'status': False}) , 409 # Duplicate
 
-@app.route('/getRequests/<user_id>', methods=['GET'])
-def getRequests(user_id):
+@app.route('/getRequests', methods=['GET'])
+def getRequests():
+    '''
     try:
         user_id = request.view_args['user_id']
     except:
         return jsonify({'friends': {}}), 400 #BAD REQUEST null values or werent passed
-
+    '''
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token, uuid = user_id).first()
     if not found_user:
         return jsonify({'friends': {}}), 400 #BAD REQUEST null values or werent passed
-    
+    user_id = found_user.uuid
 
 
     friends = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == user_id)) & (Friends.accepted == False)).all()
@@ -113,16 +114,17 @@ def getRequests(user_id):
 @app.route('/friendResponse', methods=['POST'])
 def friendResponse():
     try:
-        user_id = request.json['user_id']
         friend_id = request.json['friend_id']
         response = request.json['response'] #Boolean
     except:
         return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
     token = request.headers.get('token')
-    found_user = User.query.filter_by(token = token, uuid = user_id).first()
+    found_user = User.query.filter_by(token = token).first()
     if not found_user:
         return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+    user_id = found_user.uuid
+    
 
     friend = Friends.query.filter_by(_id_friend1 = friend_id, _id_friend2 = user_id, accepted = False).first()
     if not friend:
@@ -161,11 +163,48 @@ def friendList():
 
     return jsonify({"friends":friendList}), 200 #OK
 
-@app.route('/roomList', methods=['GET'])
-def roomList():
+@app.route('/getRooms', methods=['GET'])
+def getRooms():
+    #RETURNS LIST OF ROOMS OF A USER
+
+    token = request.headers.get('token')
+    found_user = User.query.filter_by(token = token).first()
+    if not found_user:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+    user_uuid = found_user.uuid
+    rooms = UserRooms.query.filter(UserRooms.uuid == user_uuid, UserRooms.accepted == True).all()
+    roomList = []
+    for room in rooms:
+        amountPlayers = UserRooms.query.filter(UserRooms.roomName == room.roomName, UserRooms.accepted == True).count()
+        maxSize = Rooms.query.filter(Rooms.roomName == room.roomName).first()
+        roomList.append({"roomName":room.roomName, "currSize":amountPlayers, "maxSize":maxSize.maxPlayers})
 
 
-    return jsonify({})
+    return jsonify({"rooms":roomList}), 200 #OK
+
+@app.route('/getRoom/<roomName>', methods=['GET'])
+def getRoom(roomName):
+    #RETURNS LIST OF USERS IN A ROOM
+    try:
+        roomName = request.view_args['roomName']
+    except:
+        return jsonify({'room': []}), 400 #BAD REQUEST null values or werent passed
+
+    token = request.headers.get('token')
+    found_user = User.query.filter_by(token = token).first()
+    if not found_user:
+        return jsonify({'room': []}), 400 #BAD REQUEST null values or werent passed
+    user_id = found_user.uuid
+
+    mems = []
+    members = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).all()
+    for member in members:
+        usrName = User.query.filter(User.uuid == member.uuid).first()
+        mems.append({"Username": usrName.username, "uuid": member.uuid})
+
+    return jsonify({"room":mems}), 200 #OK
+
+
 
 @app.route('/roomInvite', methods=['POST'])
 def roomInvite():
@@ -200,15 +239,54 @@ def roomInvite():
 
 @app.route('/roomResponse', methods=['POST'])
 def roomResponse():
+    try:
+        roomName = request.json["roomName"]
+        response = request.json['response'] #Boolean
+    except:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
-    return jsonify({})
+    token = request.headers.get('token')
+    found_user = User.query.filter_by(token = token).first()
+    if not found_user:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+    user_id = found_user.uuid
+
+    room = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.uuid == user_id).first()
+
+    if response: #Join
+        count = UserRooms.query.filter(UserRooms.roomName == roomName).count()
+        maxSize = (Rooms.query.filter(Rooms.roomName == roomName).first()).maxPlayers
+        if maxSize <= count:
+            return jsonify({'status': False}), 409 #ROOM FULL
+        else:
+            room.accepted = True
+            db.session.merge(room)
+            db.session.commit()
+            return jsonify({'status':True, 'msg':"Joined room"}), 200 #OK
+    else: #DENY
+        room.delete()
+        db.session.commit()
+        return jsonify({'status':True, 'msg':"Denied room"}), 200 #OK
 
 
 @app.route('/roomRequests', methods=['GET'])
 def roomInvs():
 
+    token = request.headers.get('token')
+    found_user = User.query.filter_by(token = token).first()
+    if not found_user:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+    user_id = found_user.uuid
 
-    return jsonify({})
+    rooms = UserRooms.query.filter(UserRooms.uuid == user_id, UserRooms.accepted == False).all()
+
+    request = []
+
+    for room in rooms:
+        request.append({"roomName":room.roomName})
+
+
+    return jsonify({"rooms":request})
 
 @app.route('/createRoom', methods=['POST'])
 def createRoom():
