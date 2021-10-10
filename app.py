@@ -47,54 +47,55 @@ def setSignUp():
         name = request.json['Username']
         pswd = request.json['Password']
     except:
-        return jsonify({'userCreated': False}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
     if not name or not pswd:
-        return jsonify({'userCreated': False}), 400 #BAD REQUEST empty parameters
+        return jsonify({'status': False}), 400 #BAD REQUEST empty parameters
 
     found_user = User.query.filter_by(username = name).first()
     if found_user:
-        return jsonify({'userCreated': False}), 409 # Duplicate exists
+        return jsonify({'status': False}), 409 # Duplicate exists
     else:
         usr = User(name)
         usr.hash_password(pswd)
         db.session.add(usr)
         db.session.commit()
-        return jsonify({'userCreated': True}) ,201 # User created
+        return jsonify({'status': True}) ,201 # User created
 
 @app.route('/addFriend', methods=['POST'])
 def addFriend():
     try:
-        user_id = request.json['user_id']
         friend_id = request.json['friend_id']
     except:
-        return jsonify({'friendAdded': False}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
     token = request.headers.get('token')
-    found_user = User.query.filter_by(token = token, uuid = user_id).first()
+    found_user = User.query.filter_by(token = token).first()
     if not found_user:
-        return jsonify({'friendAdded': False}), 400 #BAD REQUEST null values or werent passed
-    
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+
+    user_id = found_user.uuid
+
     friendQuery = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == friend_id)) | ((Friends._id_friend1 == friend_id )|(Friends._id_friend2 == user_id)) ).first()
     if not friendQuery:
         friend = Friends(user_id, friend_id)
         db.session.add(friend)
         db.session.commit()
-        return jsonify({'friendAdded': True}), 200 #OK
+        return jsonify({'status': True}), 200 #OK
 
-    return jsonify({'friendAdded': False}) , 409 # Duplicate
+    return jsonify({'status': False}) , 409 # Duplicate
 
 @app.route('/getRequests/<user_id>', methods=['GET'])
 def getRequests(user_id):
     try:
         user_id = request.view_args['user_id']
     except:
-        return jsonify({'Requests': {}}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'friends': {}}), 400 #BAD REQUEST null values or werent passed
 
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token, uuid = user_id).first()
     if not found_user:
-        return jsonify({'Requests': {}}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'friends': {}}), 400 #BAD REQUEST null values or werent passed
     
 
 
@@ -102,19 +103,19 @@ def getRequests(user_id):
     requests = []
     for friend in friends:
         if friend._id_friend2 == user_id:
-            print(friend.accepted)
             friend_id = friend._id_friend1
             usr = User.query.filter_by(uuid = friend_id).first()
             requests.append({"user_id":friend_id, "Username":usr.username})
 
 
-    return jsonify({"Requests":requests}), 200 #OK
+    return jsonify({"friends":requests}), 200 #OK
 
-@app.route('/acceptFriend', methods=['POST'])
-def acceptFriend():
+@app.route('/friendResponse', methods=['POST'])
+def friendResponse():
     try:
         user_id = request.json['user_id']
         friend_id = request.json['friend_id']
+        response = request.json['response'] #Boolean
     except:
         return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
@@ -123,17 +124,42 @@ def acceptFriend():
     if not found_user:
         return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
-    friend = Friends.query.filter_by(_id_friend1 = friend_id, _id_friend2 = user_id).first()
-    friend.accepted = True
-    db.session.commit()
-    print(friend.accepted)
-    return jsonify({"status":friend.accepted})
+    friend = Friends.query.filter_by(_id_friend1 = friend_id, _id_friend2 = user_id, accepted = False).first()
+    if not friend:
+        return jsonify({"status":False}), 409  #OK
+
+    if response: #ACCEPTED
+        friend.accepted = True
+        db.session.merge(friend)
+        db.session.commit()
+    else: #DENIED
+        friend.delete()
+        db.session.commit()
+
+    return jsonify({"status":friend.accepted}), 200  #OK
 
 @app.route('/friendList', methods=['GET'])
 def friendList():
+    token = request.headers.get('token')
+    found_user = User.query.filter(User.token == token).first()
+    if not found_user:
+        return jsonify({'friends': []}), 400 #BAD REQUEST null values or werent passed
 
+    user_id = (User.query.filter_by(token = token).first()).uuid
 
-    return jsonify({})
+    friends = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == user_id)) & (Friends.accepted == True)).all()	
+
+    friendList = []
+    for friend in friends:
+        if friend._id_friend1 != user_id:
+            friend_id = friend._id_friend1
+        else:
+            friend_id = friend._id_friend2
+
+        usr = User.query.filter_by(uuid = friend_id).first()
+        friendList.append({"user_id":friend_id, "Username":usr.username})
+
+    return jsonify({"friends":friendList}), 200 #OK
 
 @app.route('/roomList', methods=['GET'])
 def roomList():
@@ -141,7 +167,44 @@ def roomList():
 
     return jsonify({})
 
-@app.route('/roomInvs', methods=['GET'])
+@app.route('/roomInvite', methods=['POST'])
+def roomInvite():
+    try:
+        friend_id = request.json['friend_id']
+        roomName = request.json['roomName']
+    except:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+
+    token = request.headers.get('token')
+    found_user = User.query.filter_by(token = token).first()
+    if not found_user:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+    
+    usrRoomQuery = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == found_user.uuid, UserRooms.accepted == True).first() #if inviter is in room
+    usrRoomQuery2 = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == friend_id).first() # if friend is in room
+    if not usrRoomQuery: #User inviter isnt in this room
+        return jsonify({'status': False, "msg": "User is not in room"}), 409 # BAD REQUEST
+    elif usrRoomQuery2:
+        return jsonify({'status': False, "msg": "Friend is already invited"}), 409 # BAD REQUEST, may trigger if already invited or is in room,check later
+    else:
+        #CHECK SIZE OF PLAYERS IN ROOM FIRST
+        room = Rooms.query.filter(Rooms.roomName == roomName).first()
+        roomQuery = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).count()
+        if room.maxPlayers < roomQuery:
+            return jsonify({'status': False, "msg": "Room full"}), 409 # ROOM FULL
+
+        usrRooms = UserRooms(roomName, friend_id, False) # accepted false
+        db.session.add(usrRooms)
+        db.session.commit()
+        return jsonify({'status': True, "msg":"Invite successful"}) , 200 # OK
+
+@app.route('/roomResponse', methods=['POST'])
+def roomResponse():
+
+    return jsonify({})
+
+
+@app.route('/roomRequests', methods=['GET'])
 def roomInvs():
 
 
@@ -149,9 +212,39 @@ def roomInvs():
 
 @app.route('/createRoom', methods=['POST'])
 def createRoom():
+    try:
+        roomName = request.json['roomName']
+        pswd = request.json['Password']
+        maxPlayers = request.json['maxPlayers']
+        minBet = request.json['minBet']
+        rounds = request.json['rounds']
+    except:
+        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
 
+    if not roomName or not pswd or not maxPlayers or not minBet or not rounds:
+        return jsonify({'status': False}), 400 #BAD REQUEST empty parameters
+    
+    token = request.headers.get('token')
+    found_user = User.query.filter(User.token == token).first()
+    if not found_user:
+        return jsonify({"status":False}), 400 #TOKEN DOESNT EXIST
 
-    return jsonify({})
+    query = Rooms.query.filter_by(roomName = roomName).first()
+    if query:
+        return jsonify({"status":False}), 409 #ROOM ALREADY EXISTS
+
+    room = Rooms(roomName, maxPlayers, minBet, rounds)
+    room.hash_password(pswd)
+    db.session.add(room)
+    db.session.commit() #ROOM ADDED
+
+    userRoom = UserRooms(roomName, found_user.uuid, True)
+    db.session.add(userRoom)
+    db.session.commit() #USERROOM ADDED
+    
+    
+
+    return jsonify({"status":True}), 200 #OK
 
 @app.route('/delFriend', methods=['DEL'])
 def delFriend():

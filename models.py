@@ -33,6 +33,40 @@ class Friends(db.Model):
         self._id_friend2 = id_friend2
         self.accepted = False
     
+class Rooms(db.Model):
+    __tablename__ = "rooms"
+    _id = db.Column("id", db.Integer, primary_key = True)
+    roomName = db.Column(db.String(100))
+    password_hash = db.Column(db.String(128))
+    maxPlayers = db.Column(db.Integer)
+    minBet = db.Column(db.Integer)
+    rounds = db.Column(db.Integer)
+
+    def __init__(self, roomName, maxPlayers, minBet, rounds):
+        self.roomName = roomName
+        self.maxPlayers = maxPlayers
+        self.minBet = minBet
+        self.rounds = rounds
+
+    def hash_password(self, password):
+        self.password_hash = pwd_context.encrypt(password)
+
+    def verify_password(self, password):
+        return pwd_context.verify(password, self.password_hash)
+
+class UserRooms(db.Model):
+    __tablename__ = "userrooms"
+    _id = db.Column("id", db.Integer, primary_key = True)
+    roomName = db.Column(db.String(100), db.ForeignKey("rooms.roomName"))
+    uuid = db.Column(db.String(10), db.ForeignKey("user.uuid"))
+    accepted = db.Column(db.Boolean)
+
+    def __init__(self, roomName, uuid, accepted):
+        self.roomName = roomName
+        self.uuid = uuid
+        self.accepted = accepted
+
+
 
 if __name__ == "__main__":
     db.create_all()
