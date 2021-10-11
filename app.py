@@ -28,16 +28,16 @@ def get_login():
         name = request.json['Username']
         pswd = request.json['Password']
     except:
-        return jsonify({'status': False, 'token': '', 'uuid':''}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, 'token': '', 'user_id':''}), 400 #BAD REQUEST null values or werent passed
 
     if not name or not pswd:
-        return jsonify({'status': False, 'token': '', 'uuid':''}), 400 #BAD REQUEST empty parameters
+        return jsonify({'status': False, 'token': '', 'user_id':''}), 400 #BAD REQUEST empty parameters
 
     usr = User.query.filter_by(username = name).first()
     if not usr or not usr.verify_password(pswd):
-        return jsonify({'status': False, 'token': '', 'uid':''}), 404 #USER DOESNT EXIST or BAD PASSWORD
+        return jsonify({'status': False, 'token': '', 'user_id':''}), 404 #USER DOESNT EXIST or BAD PASSWORD
     else:
-        return jsonify({'status': True, 'token': usr.token, 'uuid': usr.uuid}), 200 #OK
+        return jsonify({'status': True, 'token': usr.token, 'user_id': usr.uuid}), 200 #OK
 
 
 @app.route('/signup', methods=['POST'])
@@ -94,7 +94,7 @@ def getRequests():
         return jsonify({'friends': {}}), 400 #BAD REQUEST null values or werent passed
     '''
     token = request.headers.get('token')
-    found_user = User.query.filter_by(token = token, uuid = user_id).first()
+    found_user = User.query.filter_by(token = token).first()
     if not found_user:
         return jsonify({'friends': {}}), 400 #BAD REQUEST null values or werent passed
     user_id = found_user.uuid
@@ -200,7 +200,7 @@ def getRoom(roomName):
     members = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).all()
     for member in members:
         usrName = User.query.filter(User.uuid == member.uuid).first()
-        mems.append({"Username": usrName.username, "uuid": member.uuid})
+        mems.append({"Username": usrName.username, "user_id": member.uuid})
 
     return jsonify({"room":mems}), 200 #OK
 
