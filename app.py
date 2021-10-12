@@ -67,23 +67,33 @@ def addFriend():
     try:
         friend_id = request.json['friend_id']
     except:
-        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
-
+        return jsonify({'status': False, 'msg': 'No ID received'}), 200 #BAD REQUEST null values or werent passed
+    print(friend_id)    
+	
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token).first()
     if not found_user:
-        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, 'msg':'Token isnt valid'}), 200 #BAD REQUEST null values or werent passed
 
     user_id = found_user.uuid
+	
+    friend = User.query.filter(User.uuid == friend_id).first()
+    if not friend:
+        return jsonify({"status":False, "msg":"Friend doesn't exist"}), 200
+        
+    #friendQuery = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == friend_id)) | ((Friends._id_friend1 == friend_id )|(Friends._id_friend2 == user_id)) ).first()
+    friendQ1 = Friends.query.filter(Friends._id_friend1 == user_id, Friends._id_friend2 == friend_id).first()
+    friendQ2 = Friends.query.filter(Friends._id_friend1 == friend_id, Friends._id_friend2 == user_id).first()
+    #print(friendQ1)
+    #print(friendQ2._id_friend1, friendQ2._id_friend2)    
 
-    friendQuery = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == friend_id)) | ((Friends._id_friend1 == friend_id )|(Friends._id_friend2 == user_id)) ).first()
-    if not friendQuery:
+    if not friendQ1 and not friendQ2:
         friend = Friends(user_id, friend_id)
         db.session.add(friend)
         db.session.commit()
-        return jsonify({'status': True}), 200 #OK
-
-    return jsonify({'status': False}) , 409 # Duplicate
+        return jsonify({'status': True, 'msg':'Success'}), 200 #OK
+    else:
+        return jsonify({'status': False , 'msg': 'Already added'}) , 200 # Duplicate
 
 @app.route('/getRequests', methods=['GET'])
 def getRequests():
@@ -100,13 +110,13 @@ def getRequests():
     user_id = found_user.uuid
 
 
-    friends = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == user_id)) & (Friends.accepted == False)).all()
+    friends = Friends.query.filter(Friends._id_friend2 == user_id, Friends.accepted == False).all()
     requests = []
     for friend in friends:
         if friend._id_friend2 == user_id:
             friend_id = friend._id_friend1
             usr = User.query.filter_by(uuid = friend_id).first()
-            requests.append({"user_id":friend_id, "Username":usr.username})
+            requests.append({"friend_id":friend_id, "Username":usr.username})
 
 
     return jsonify({"friends":requests}), 200 #OK
@@ -117,18 +127,18 @@ def friendResponse():
         friend_id = request.json['friend_id']
         response = request.json['response'] #Boolean
     except:
-        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, "msg": "Bad parameters"}), 200 #BAD REQUEST null values or werent passed
 
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token).first()
     if not found_user:
-        return jsonify({'status': False}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, "msg":"Token isn't valid"}), 200 #BAD REQUEST null values or werent passed
     user_id = found_user.uuid
     
 
     friend = Friends.query.filter_by(_id_friend1 = friend_id, _id_friend2 = user_id, accepted = False).first()
     if not friend:
-        return jsonify({"status":False}), 409  #OK
+        return jsonify({"status":False, "msg":"Request is not valid anymore"}), 200 
 
     if response: #ACCEPTED
         friend.accepted = True
@@ -138,14 +148,14 @@ def friendResponse():
         friend.delete()
         db.session.commit()
 
-    return jsonify({"status":friend.accepted}), 200  #OK
+    return jsonify({"status":friend.accepted, "msg":"Success"}), 200  #OK
 
 @app.route('/friendList', methods=['GET'])
 def friendList():
     token = request.headers.get('token')
     found_user = User.query.filter(User.token == token).first()
     if not found_user:
-        return jsonify({'friends': []}), 400 #BAD REQUEST null values or werent passed
+        return jsonify({'friends': [], "msg":"Token isnt valid"}), 200 #BAD REQUEST null values or werent passed
 
     user_id = (User.query.filter_by(token = token).first()).uuid
 
@@ -159,9 +169,9 @@ def friendList():
             friend_id = friend._id_friend2
 
         usr = User.query.filter_by(uuid = friend_id).first()
-        friendList.append({"user_id":friend_id, "Username":usr.username})
+        friendList.append({"friend_id":friend_id, "Username":usr.username})
 
-    return jsonify({"friends":friendList}), 200 #OK
+    return jsonify({"friends":friendList, "msg":"Success"}), 200 #OK
 
 @app.route('/getRooms', methods=['GET'])
 def getRooms():
@@ -334,4 +344,4 @@ def delFriend():
 
 if __name__ == '__main__':
 
-    app.run(host='localhost', port=5000,debug=True)
+    app.run(host='0.0.0.0', port=5000,debug=True)
