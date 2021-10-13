@@ -8,6 +8,7 @@ class User(db.Model):
     username = db.Column(db.String(100))
     password_hash = db.Column(db.String(128))
     token = db.Column(db.String(100))
+    fb_token = db.Column(db.String(100), nullable = True, default = None)
     uuid = db.Column(db.String(10))
 
     def __init__(self, username):

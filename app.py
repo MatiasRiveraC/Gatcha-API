@@ -30,13 +30,17 @@ def get_login():
     except:
         return jsonify({'status': False, 'token': '', 'user_id':''}), 400 #BAD REQUEST null values or werent passed
 
-    if not name or not pswd:
-        return jsonify({'status': False, 'token': '', 'user_id':''}), 400 #BAD REQUEST empty parameters
+    fb_token = request.headers.get('fb_token')  
+    if not name or not pswd or not fb_token:
+        return jsonify({'status': False, 'token': '', 'user_id':''}), 200 #BAD REQUEST null values or werent passed
 
     usr = User.query.filter_by(username = name).first()
     if not usr or not usr.verify_password(pswd):
         return jsonify({'status': False, 'token': '', 'user_id':''}), 404 #USER DOESNT EXIST or BAD PASSWORD
     else:
+        usr.fb_token = fb_token
+        db.session.merge(usr)
+        db.session.commit()
         return jsonify({'status': True, 'token': usr.token, 'user_id': usr.uuid}), 200 #OK
 
 
@@ -67,19 +71,19 @@ def addFriend():
     try:
         friend_id = request.json['friend_id']
     except:
-        return jsonify({'status': False, 'msg': 'No ID received'}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, 'msg': 'No ID received', 'fb_token':''}), 200 #BAD REQUEST null values or werent passed
     print(friend_id)    
 	
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token).first()
     if not found_user:
-        return jsonify({'status': False, 'msg':'Token isnt valid'}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, 'msg':'Token isnt valid', 'fb_token':''}), 200 #BAD REQUEST null values or werent passed
 
     user_id = found_user.uuid
 	
     friend = User.query.filter(User.uuid == friend_id).first()
     if not friend:
-        return jsonify({"status":False, "msg":"Friend doesn't exist"}), 200
+        return jsonify({"status":False, "msg":"Friend doesn't exist", 'fb_token':''}), 200
         
     #friendQuery = Friends.query.filter(((Friends._id_friend1 == user_id )|(Friends._id_friend2 == friend_id)) | ((Friends._id_friend1 == friend_id )|(Friends._id_friend2 == user_id)) ).first()
     friendQ1 = Friends.query.filter(Friends._id_friend1 == user_id, Friends._id_friend2 == friend_id).first()
@@ -91,9 +95,10 @@ def addFriend():
         friend = Friends(user_id, friend_id)
         db.session.add(friend)
         db.session.commit()
-        return jsonify({'status': True, 'msg':'Success'}), 200 #OK
+        queryUser = User.query.filter_by(uuid = friend_id).first()
+        return jsonify({'status': True, 'msg':'Success', 'fb_token':queryUser.fb_token}), 200 #OK
     else:
-        return jsonify({'status': False , 'msg': 'Already added'}) , 200 # Duplicate
+        return jsonify({'status': False , 'msg': 'Already added', 'fb_token':''}) , 200 # Duplicate
 
 @app.route('/getRequests', methods=['GET'])
 def getRequests():
@@ -226,33 +231,34 @@ def roomInvite():
         friend_id = request.json['friend_id']
         roomName = request.json['roomName']
     except:
-        return jsonify({'status': False, "msg":"Bad parameters"}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, "msg":"Bad parameters", 'fb_token':''}), 200 #BAD REQUEST null values or werent passed
 
     if friend_id == "" or friend_id == None or roomName == "" or roomName == "None":
-        return jsonify({"status":False, "msg":"Empty parameters"}), 200
+        return jsonify({"status":False, "msg":"Empty parameters", 'fb_token':''}), 200
 
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token).first()
     if not found_user:
-        return jsonify({'status': False, "msg":"Token isn't valid"}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, "msg":"Token isn't valid", 'fb_token':''}), 200 #BAD REQUEST null values or werent passed
 
     usrRoomQuery = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == found_user.uuid).first() #if inviter is in room
     usrRoomQuery2 = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == friend_id, UserRooms.accepted == None).first() # if friend is in room
     if not usrRoomQuery: #User inviter isnt in this room
-        return jsonify({'status': False, "msg": "User is not in room"}), 200 # BAD REQUEST
+        return jsonify({'status': False, "msg": "User is not in room", 'fb_token':''}), 200 # BAD REQUEST
     elif usrRoomQuery2:
-        return jsonify({'status': False, "msg": "Friend is already invited"}), 200 # BAD REQUEST, may trigger if already invited or is in room,check later
+        return jsonify({'status': False, "msg": "Friend is already invited", 'fb_token':''}), 200 # BAD REQUEST, may trigger if already invited or is in room,check later
     else:
         #CHECK SIZE OF PLAYERS IN ROOM FIRST
         room = Rooms.query.filter(Rooms.roomName == roomName).first()
         roomQuery = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).count()
         if room.maxPlayers < roomQuery:
-            return jsonify({'status': False, "msg": "Room full"}), 200 # ROOM FULL
+            return jsonify({'status': False, "msg": "Room full", 'fb_token':''}), 200 # ROOM FULL
 
         usrRooms = UserRooms(roomName, friend_id, None) # accepted false
         db.session.add(usrRooms)
         db.session.commit()
-        return jsonify({'status': True, "msg":"Invite successful"}) , 200 # OK
+        queryUser = User.query.filter_by(uuid = friend_id).first()
+        return jsonify({'status': True, "msg":"Invite successful", 'fb_token': queryUser.fb_token}) , 200 # OK
 
 @app.route('/roomResponse', methods=['POST'])
 def roomResponse():
