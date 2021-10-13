@@ -136,7 +136,7 @@ def friendResponse():
     user_id = found_user.uuid
     
 
-    friend = Friends.query.filter_by(_id_friend1 = friend_id, _id_friend2 = user_id, accepted = False).first()
+    friend = Friends.query.filter_by(_id_friend1 = friend_id, _id_friend2 = user_id).first()
     if not friend:
         return jsonify({"status":False, "msg":"Request is not valid anymore"}), 200 
 
@@ -188,7 +188,7 @@ def getRooms():
     for room in rooms:
         amountPlayers = UserRooms.query.filter(UserRooms.roomName == room.roomName, UserRooms.accepted == True).count()
         maxSize = Rooms.query.filter(Rooms.roomName == room.roomName).first()
-        roomList.append({"roomName":room.roomName, "currSize":amountPlayers, "maxSize":maxSize.maxPlayers})
+        roomList.append({"roomName":room.roomName, "currSize":amountPlayers, "maxPlayers":maxSize.maxPlayers})
 
 
     return jsonify({"rooms":roomList, "msg":"Success"}), 200 #OK
@@ -237,7 +237,7 @@ def roomInvite():
         return jsonify({'status': False, "msg":"Token isn't valid"}), 200 #BAD REQUEST null values or werent passed
 
     usrRoomQuery = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == found_user.uuid).first() #if inviter is in room
-    usrRoomQuery2 = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == friend_id, UserRooms.uuid == None).first() # if friend is in room
+    usrRoomQuery2 = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == friend_id, UserRooms.accepted == None).first() # if friend is in room
     if not usrRoomQuery: #User inviter isnt in this room
         return jsonify({'status': False, "msg": "User is not in room"}), 200 # BAD REQUEST
     elif usrRoomQuery2:
