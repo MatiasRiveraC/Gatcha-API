@@ -271,19 +271,24 @@ def roomResponse():
     user_id = found_user.uuid
 
     room = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.uuid == user_id).first()
-
+    
+    print(room)
     if response: #Join
-        count = UserRooms.query.filter(UserRooms.roomName == roomName).count()
+        count = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).count()
         maxSize = (Rooms.query.filter(Rooms.roomName == roomName).first()).maxPlayers
         if maxSize <= count:
+            print(maxSize, count, "FULL")
             return jsonify({'status': False, "msg":"Room full"}), 200 #ROOM FULL
         else:
+            print("ACCEPT")
             room.accepted = True
             db.session.merge(room)
             db.session.commit()
             return jsonify({'status':True, 'msg':"Joined room"}), 200 #OK
     else: #DENY
-        db.session.delete(room)
+        print("DENY")
+        obj = UserRooms.query.filter_by(_id = room._id).one()
+        db.session.delete(obj)
         db.session.commit()
         return jsonify({'status':True, 'msg':"Denied room"}), 200 #OK
 
