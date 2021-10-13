@@ -26,12 +26,12 @@ class Friends(db.Model):
     _id = db.Column("id", db.Integer, primary_key = True)
     _id_friend1 = db.Column(db.String(10), db.ForeignKey('user.uuid'))
     _id_friend2 = db.Column(db.String(10), db.ForeignKey('user.uuid'))
-    accepted = db.Column(db.Boolean)
+    accepted = db.Column(db.Boolean, nullable= True, default = None)
 
     def __init__(self, id_friend1, id_friend2):
         self._id_friend1 = id_friend1
         self._id_friend2 = id_friend2
-        self.accepted = False
+        #self.accepted = False
     
 class Rooms(db.Model):
     __tablename__ = "rooms"
@@ -59,7 +59,7 @@ class UserRooms(db.Model):
     _id = db.Column("id", db.Integer, primary_key = True)
     roomName = db.Column(db.String(100), db.ForeignKey("rooms.roomName"))
     uuid = db.Column(db.String(10), db.ForeignKey("user.uuid"))
-    accepted = db.Column(db.Boolean)
+    accepted = db.Column(db.Boolean, nullable= True)
 
     def __init__(self, roomName, uuid, accepted):
         self.roomName = roomName

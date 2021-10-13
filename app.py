@@ -110,7 +110,7 @@ def getRequests():
     user_id = found_user.uuid
 
 
-    friends = Friends.query.filter(Friends._id_friend2 == user_id, Friends.accepted == False).all()
+    friends = Friends.query.filter(Friends._id_friend2 == user_id, Friends.accepted == None).all()
     requests = []
     for friend in friends:
         if friend._id_friend2 == user_id:
@@ -145,7 +145,8 @@ def friendResponse():
         db.session.merge(friend)
         db.session.commit()
     else: #DENIED
-        friend.delete()
+        friend.accepted = False
+        db.session.merge(friend)
         db.session.commit()
 
     return jsonify({"status":friend.accepted, "msg":"Success"}), 200  #OK
@@ -236,7 +237,7 @@ def roomInvite():
         return jsonify({'status': False, "msg":"Token isn't valid"}), 200 #BAD REQUEST null values or werent passed
 
     usrRoomQuery = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == found_user.uuid).first() #if inviter is in room
-    usrRoomQuery2 = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == friend_id).first() # if friend is in room
+    usrRoomQuery2 = UserRooms.query.filter(UserRooms.roomName == roomName , UserRooms.uuid == friend_id, UserRooms.uuid == None).first() # if friend is in room
     if not usrRoomQuery: #User inviter isnt in this room
         return jsonify({'status': False, "msg": "User is not in room"}), 200 # BAD REQUEST
     elif usrRoomQuery2:
@@ -248,7 +249,7 @@ def roomInvite():
         if room.maxPlayers < roomQuery:
             return jsonify({'status': False, "msg": "Room full"}), 200 # ROOM FULL
 
-        usrRooms = UserRooms(roomName, friend_id, False) # accepted false
+        usrRooms = UserRooms(roomName, friend_id, None) # accepted false
         db.session.add(usrRooms)
         db.session.commit()
         return jsonify({'status': True, "msg":"Invite successful"}) , 200 # OK
@@ -287,8 +288,8 @@ def roomResponse():
             return jsonify({'status':True, 'msg':"Joined room"}), 200 #OK
     else: #DENY
         print("DENY")
-        obj = UserRooms.query.filter_by(_id = room._id).one()
-        db.session.delete(obj)
+        room.accepted = False
+        db.session.merge(room)
         db.session.commit()
         return jsonify({'status':True, 'msg':"Denied room"}), 200 #OK
 
@@ -302,7 +303,7 @@ def roomInvs():
         return jsonify({'status': False, "msg":"Bad parameters"}), 200 #BAD REQUEST null values or werent passed
     user_id = found_user.uuid
 
-    rooms = UserRooms.query.filter(UserRooms.uuid == user_id, UserRooms.accepted == False).all()
+    rooms = UserRooms.query.filter(UserRooms.uuid == user_id, UserRooms.accepted == None).all()
 
     requests = []
 
