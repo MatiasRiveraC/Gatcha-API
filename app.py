@@ -27,10 +27,11 @@ def get_login():
     try:
         name = request.json['Username']
         pswd = request.json['Password']
+        fb_token = request.json['fb_token']
     except:
         return jsonify({'status': False, 'token': '', 'user_id':''}), 400 #BAD REQUEST null values or werent passed
 
-    fb_token = request.headers.get('fb_token')  
+    print(fb_token)
     if not name or not pswd or not fb_token:
         return jsonify({'status': False, 'token': '', 'user_id':''}), 200 #BAD REQUEST null values or werent passed
 
@@ -182,10 +183,12 @@ def friendList():
 @app.route('/getRooms', methods=['GET'])
 def getRooms():
     #RETURNS LIST OF ROOMS OF A USER
-
+    print("GET ROOMS")
     token = request.headers.get('token')
+    print(token)
     found_user = User.query.filter_by(token = token).first()
     if not found_user:
+        print("User not found")
         return jsonify({'status': False, "msg":"Token isn't valid"}), 200 #BAD REQUEST null values or werent passed
     user_uuid = found_user.uuid
     rooms = UserRooms.query.filter(UserRooms.uuid == user_uuid, UserRooms.accepted == True).all()
@@ -195,7 +198,7 @@ def getRooms():
         maxSize = Rooms.query.filter(Rooms.roomName == room.roomName).first()
         roomList.append({"roomName":room.roomName, "currSize":amountPlayers, "maxPlayers":maxSize.maxPlayers})
 
-
+    print(rooms)
     return jsonify({"rooms":roomList, "msg":"Success"}), 200 #OK
 
 @app.route('/getRoom/<roomName>', methods=['GET'])
