@@ -1,5 +1,7 @@
+from logging import FATAL
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
+import random
 
 if __name__ == "__main__":
     from models import *
@@ -64,6 +66,9 @@ def setSignUp():
         usr = User(name)
         usr.hash_password(pswd)
         db.session.add(usr)
+        db.session.commit()
+        usrStats = UserStats(usr.uuid)
+        db.session.add(usrStats)
         db.session.commit()
         return jsonify({'status': True}) ,201 # User created
 
@@ -150,6 +155,14 @@ def friendResponse():
         friend.accepted = True
         db.session.merge(friend)
         db.session.commit()
+        f1 = UserStats(user_id)
+        f2 = UserStats(friend_id)
+        f1.total_frnds = f1.total_frnds + 1
+        db.session.merge(f1)
+        db.session.commit()
+        f2.total_frnds = f2.total_frnds + 1
+        db.session.merge(f2)
+        db.session.commit()
     else: #DENIED
         friend.accepted = False
         db.session.merge(friend)
@@ -222,9 +235,12 @@ def getRoom(roomName):
     members = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).all()
     for member in members:
         usrName = User.query.filter(User.uuid == member.uuid).first()
-        mems.append({"Username": usrName.username, "user_id": member.uuid})
+        mems.append({"Username": usrName.username, "user_id": member.uuid, "gatchas": members.gatchas})
 
-    return jsonify({"room":mems, "msg":"Success"}), 200 #OK
+    room = Rooms.query.filter(Rooms.roomName == roomName).first()
+
+
+    return jsonify({"room":mems, "msg":"Success", "lastResult": room.last_result, "curr_round": room.curr_round, "voting":room.voting}), 200 #OK
 
 
 
@@ -357,6 +373,118 @@ def createRoom():
     
 
     return jsonify({"status":True, "msg":"Room created"}), 200 #OK
+
+def voteResult(rng, vote):
+    '''
+        01
+        234
+        56789
+    '''
+    nums = [[0,1], [2,3,4], [5,6,7,8,9]]
+
+    if 10 <= vote <= 12:
+        if vote == 10:
+            if rng in nums[0]:
+                return 3
+            return -1
+        elif vote == 11:
+            if rng in nums[1]:
+                return 2
+            return -1
+        elif vote == 12:
+            if rng in nums[2]:
+                return 1
+            return -1
+        else:
+            if vote == rng:
+                return 5
+            return -1
+
+
+@app.route('/vote', methods = ['POST'])
+def vote():
+    try:
+        roomName = request.json['roomName']
+        bet = request.json['bet']
+        vote = request.json['vote']
+        round = request.json['round']
+    except:
+        return jsonify({'status': False, "msg":"Bad parameters"}), 200 #BAD REQUEST null values or werent passed
+
+    if not roomName or not vote or not bet or not round:
+        return jsonify({'status': False, "msg":"Empty parameters"}), 200 #BAD REQUEST empty parameters
+    
+    token = request.headers.get('token')
+    found_user = User.query.filter(User.token == token).first()
+    if not found_user:
+        return jsonify({"status":False, "msg":"Token isn't valid"}), 200 #TOKEN DOESNT EXIST
+
+    user_id = found_user.uuid
+    voteCheck = UserVote.query.filter(UserVote.uuid == user_id, UserVote.round == round)
+    if not voteCheck:
+        room = Rooms.query.filter(Rooms.roomName == roomName).first() #puedo conseguir, maxPlayers, rounds, curr round, voting y lastResult
+        if not room.voting: # no se puede votar mas
+            return jsonify({"status":False, "msg":"Room's closed!"}), 200 #Room's closed!
+
+        usrVote = UserVote(roomName, user_id, vote, bet, round) #roomName, uuid, vote, bet, round
+        db.session.add(usrVote)
+        db.session.commit() #USERVOTE ADDED
+        
+        votes = UserVote.query.filter(UserVote.roomName == roomName, UserVote.round == room.curr_round).all() #obtener todos los votos de la ronda actual
+        count = UserVote.query.filter(UserVote.roomName == roomName, UserVote.round == room.curr_round).count() #cantidad de votos en ronda actual
+        if room.maxPlayers == count: #cantidad votos = cantidad de jugadores
+            rng = random.randint(0,9)
+            deadPlayers = 0
+            for vote in votes:
+                usrRoom = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.uuid == vote.uuid, UserRooms.accepted ==True).first() #conseguir gatchas
+                if usrRoom:
+                    result = voteResult(rng, vote.vote)
+                    if result > 0:
+                        usrStat = UserStats.query.filter(UserStats.uuid == vote.uuid)
+                        usrStat.bet_wins = usrStat.bet_wins + 1 # add bet wins
+                        db.session.merge(usrStat)
+                        db.session.commit()
+
+                    usrRoom.gatchas = usrRoom.gatchas + vote.bet * result # gatchas - 1x bet 
+                    if usrRoom.gatchas < 0:
+                        usrRoom.accepted = False #desuscribirlo
+                        temp =  UserStats.query.filter(UserStats.uuid == usrRoom.uuid)
+                        temp.total_games = temp.total_games + 1
+                        db.session.merge(temp)
+                        db.session.commit()
+                        deadPlayers += 1
+
+                    db.session.merge(usrRoom)
+                    db.session.commit()
+            #se calcularon los gactchas de cada jugador de esta ronda
+            room.maxPlayers = room.maxPlayers - deadPlayers # se resta los jugadores muertos
+            room.last_result = rng
+
+            if room.rounds == room.curr_round: #se llego al ultimo round
+                usrRooms = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted ==True).all()
+                for usr in usrRooms:
+                    usrStat = UserStats.query.filter(UserStats.uuid == usr.uuid)
+                    usrStat.total_games = usrStat.total_games + 1 # INC total games
+                    usrStat.vtry_pts = usrStat.vtry_pts + usr.gatchas # INC victory points
+                    usrStat.won_games = usrStat.won_games + 1 # INC victory points
+                    if usrStat.maxGatcha < usr.gatchas:
+                        usrStat.maxGatcha = usr.gatchas #INC MAX GATCHA
+                    db.session.merge(usrStat)
+                    db.session.commit()
+            
+                #sumar victory points = cantidad gatchas y total games, max gatcha
+
+                room.voting = False #cerrar votaciones
+            else:
+                room.curr_round = room.curr_round + 1 #aumentar current round por 1
+
+            db.session.merge(room)
+            db.session.commit()
+
+        return jsonify({"msg":"Voted successfully", 'status': True}), 200 #SUCCESS
+    
+    return jsonify({"msg":"Already voted", 'status': False}), 200 #Already voted
+
 
 @app.route('/delFriend', methods=['DEL'])
 def delFriend():

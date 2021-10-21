@@ -1,6 +1,7 @@
 import uuid
 from app import db
 from passlib.apps import custom_app_context as pwd_context
+from datetime import datetime
 
 class User(db.Model):
     __tablename__ = 'user'
@@ -42,12 +43,18 @@ class Rooms(db.Model):
     maxPlayers = db.Column(db.Integer)
     minBet = db.Column(db.Integer)
     rounds = db.Column(db.Integer)
+    curr_round = db.Column(db.Integer, nullable= True)
+    lastResult = db.Column(db.Integer, nullable= True)
+    voting = db.Column(db.Boolean)
 
     def __init__(self, roomName, maxPlayers, minBet, rounds):
         self.roomName = roomName
         self.maxPlayers = maxPlayers
         self.minBet = minBet
         self.rounds = rounds
+        self.curr_round = 1
+        self.lastResult = None
+        self.voting = True
 
     def hash_password(self, password):
         self.password_hash = pwd_context.encrypt(password)
@@ -61,11 +68,52 @@ class UserRooms(db.Model):
     roomName = db.Column(db.String(100), db.ForeignKey("rooms.roomName"))
     uuid = db.Column(db.String(10), db.ForeignKey("user.uuid"))
     accepted = db.Column(db.Boolean, nullable= True)
+    gatchas = db.Column(db.Integer)
 
     def __init__(self, roomName, uuid, accepted):
         self.roomName = roomName
         self.uuid = uuid
         self.accepted = accepted
+        self.gatchas = 2000
+
+class UserVote(db.Model):
+    __tablename__ = "uservote"
+    _id = db.Column("id", db.Integer, primary_key = True)
+    roomName = db.Column(db.String(100), db.ForeignKey("rooms.roomName"))
+    uuid = db.Column(db.String(10), db.ForeignKey("user.uuid"))
+    vote = db.Column(db.Integer)
+    bet = db.Column(db.Integer)
+    round = db.Column(db.Integer)
+
+    def __init__(self, roomName, uuid, vote, bet, round):
+        self.roomName = roomName
+        self.uuid = uuid
+        self.vote = vote
+        self.bet = bet
+        self.round = round
+
+class UserStats(db.Model):
+    __tablename__ = "userstats"
+    _id = db.Column("id", db.Integer, primary_key = True)
+    uuid = db.Column(db.String(10), db.ForeignKey("user.uuid"))
+    vtry_pts = db.Column(db.Integer)
+    total_games = db.Column(db.Integer)
+    won_games = db.Column(db.Integer)
+    bet_wins = db.Column(db.Integer)
+    total_frnds =  db.Column(db.Integer)
+    maxGatcha = db.Column(db.Integer)
+    createDate = db.Column(db.String(20))
+
+    def __init__(self, uuid):
+        self.uuid = uuid
+        self.vtry_pts = 0
+        self.total_games = 0
+        self.won_games = 0
+        self.bet_wins = 0
+        self.total_frnds = 0
+        self.maxGatcha = 0
+        self.createDate = datetime.now().strftime("%d-%b-%Y")
+
 
 
 
