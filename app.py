@@ -409,22 +409,22 @@ def vote():
         vote = request.json['vote']
         round = request.json['round']
     except:
-        return jsonify({'status': False, "msg":"Bad parameters"}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'status': False, "msg":"Bad parameters"}), 400 #BAD REQUEST null values or werent passed
 
     if not roomName or not vote or not bet or not round:
-        return jsonify({'status': False, "msg":"Empty parameters"}), 200 #BAD REQUEST empty parameters
+        return jsonify({'status': False, "msg":"Empty parameters"}), 400 #BAD REQUEST empty parameters
     
     token = request.headers.get('token')
     found_user = User.query.filter(User.token == token).first()
     if not found_user:
-        return jsonify({"status":False, "msg":"Token isn't valid"}), 200 #TOKEN DOESNT EXIST
+        return jsonify({"status":False, "msg":"Token isn't valid"}), 404 #TOKEN DOESNT EXIST
 
     user_id = found_user.uuid
     voteCheck = UserVote.query.filter(UserVote.uuid == user_id, UserVote.round == round)
     if not voteCheck:
         room = Rooms.query.filter(Rooms.roomName == roomName).first() #puedo conseguir, maxPlayers, rounds, curr round, voting y lastResult
         if not room.voting: # no se puede votar mas
-            return jsonify({"status":False, "msg":"Room's closed!"}), 200 #Room's closed!
+            return jsonify({"status":False, "msg":"Room's closed!"}), 400 #Room's closed!
 
         usrVote = UserVote(roomName, user_id, vote, bet, round) #roomName, uuid, vote, bet, round
         db.session.add(usrVote)
@@ -483,7 +483,7 @@ def vote():
 
         return jsonify({"msg":"Voted successfully", 'status': True}), 200 #SUCCESS
     
-    return jsonify({"msg":"Already voted", 'status': False}), 200 #Already voted
+    return jsonify({"msg":"Already voted", 'status': False}), 409 #Already voted
 
 
 @app.route('/delFriend', methods=['DEL'])
