@@ -395,10 +395,10 @@ def voteResult(rng, vote):
             if rng in nums[2]:
                 return 1
             return -1
-        else:
-            if vote == rng:
-                return 5
-            return -1
+    else:
+        if vote == rng:
+            return 5
+        return -1
 
 
 @app.route('/vote', methods = ['POST'])
@@ -420,7 +420,8 @@ def vote():
         return jsonify({"status":False, "msg":"Token isn't valid"}), 404 #TOKEN DOESNT EXIST
 
     user_id = found_user.uuid
-    voteCheck = UserVote.query.filter(UserVote.uuid == user_id, UserVote.round == round)
+    voteCheck = UserVote.query.filter(UserVote.uuid == user_id, UserVote.round == round, UserVote.roomName == roomName).first()
+    print(f"Vote query: {voteCheck} - uuid:{user_id} - round: {round} - roomName: {roomName}")  
     if not voteCheck:
         room = Rooms.query.filter(Rooms.roomName == roomName).first() #puedo conseguir, maxPlayers, rounds, curr round, voting y lastResult
         if not room.voting: # no se puede votar mas
@@ -438,9 +439,10 @@ def vote():
             for vote in votes:
                 usrRoom = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.uuid == vote.uuid, UserRooms.accepted ==True).first() #conseguir gatchas
                 if usrRoom:
+                    print(f"Vote {vote.vote}")
                     result = voteResult(rng, vote.vote)
                     if result > 0:
-                        usrStat = UserStats.query.filter(UserStats.uuid == vote.uuid)
+                        usrStat = UserStats.query.filter(UserStats.uuid == vote.uuid).first()
                         usrStat.bet_wins = usrStat.bet_wins + 1 # add bet wins
                         db.session.merge(usrStat)
                         db.session.commit()
@@ -448,7 +450,7 @@ def vote():
                     usrRoom.gatchas = usrRoom.gatchas + vote.bet * result # gatchas - 1x bet 
                     if usrRoom.gatchas < 0:
                         usrRoom.accepted = False #desuscribirlo
-                        temp =  UserStats.query.filter(UserStats.uuid == usrRoom.uuid)
+                        temp =  UserStats.query.filter(UserStats.uuid == usrRoom.uuid).first()
                         temp.total_games = temp.total_games + 1
                         db.session.merge(temp)
                         db.session.commit()
@@ -463,7 +465,7 @@ def vote():
             if room.rounds == room.curr_round: #se llego al ultimo round
                 usrRooms = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted ==True).all()
                 for usr in usrRooms:
-                    usrStat = UserStats.query.filter(UserStats.uuid == usr.uuid)
+                    usrStat = UserStats.query.filter(UserStats.uuid == usr.uuid).first()
                     usrStat.total_games = usrStat.total_games + 1 # INC total games
                     usrStat.vtry_pts = usrStat.vtry_pts + usr.gatchas # INC victory points
                     usrStat.won_games = usrStat.won_games + 1 # INC victory points
@@ -473,11 +475,13 @@ def vote():
                     db.session.commit()
             
                 #sumar victory points = cantidad gatchas y total games, max gatcha
-
+                
+                
                 room.voting = False #cerrar votaciones
+                
             else:
                 room.curr_round = room.curr_round + 1 #aumentar current round por 1
-
+                
             db.session.merge(room)
             db.session.commit()
 
