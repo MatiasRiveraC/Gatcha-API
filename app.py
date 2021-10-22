@@ -235,12 +235,12 @@ def getRoom(roomName):
     members = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted == True).all()
     for member in members:
         usrName = User.query.filter(User.uuid == member.uuid).first()
-        mems.append({"Username": usrName.username, "user_id": member.uuid, "gatchas": members.gatchas})
+        mems.append({"Username": usrName.username, "user_id": member.uuid, "gatchas": member.gatchas})
 
     room = Rooms.query.filter(Rooms.roomName == roomName).first()
 
-
-    return jsonify({"room":mems, "msg":"Success", "lastResult": room.last_result, "curr_round": room.curr_round, "voting":room.voting}), 200 #OK
+    print({"room":mems, "msg":"Success", "lastResult": room.lastResult, "curr_round": room.curr_round, "voting":room.voting})
+    return jsonify({"room":mems, "msg":"Success", "lastResult": room.lastResult, "curr_round": room.curr_round, "voting":room.voting}), 200 #OK
 
 
 
