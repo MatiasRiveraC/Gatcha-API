@@ -220,15 +220,15 @@ def getRoom(roomName):
     try:
         roomName = request.view_args['roomName']
     except:
-        return jsonify({'room': [], "msg":"Bad parameters"}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'room': [], "msg":"Bad parameters"}), 400 #BAD REQUEST null values or werent passed
 
     if roomName == "" or roomName == None:
-        return jsonify({'room':[], "msg":"Empty parameters"}), 200
+        return jsonify({'room':[], "msg":"Empty parameters"}), 400
 
     token = request.headers.get('token')
     found_user = User.query.filter_by(token = token).first()
     if not found_user:
-        return jsonify({'room': [], "msg":"Token isn't valid"}), 200 #BAD REQUEST null values or werent passed
+        return jsonify({'room': [], "msg":"Token isn't valid"}), 404 #BAD REQUEST null values or werent passed
     user_id = found_user.uuid
 
     mems = []
