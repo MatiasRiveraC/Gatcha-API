@@ -439,40 +439,30 @@ def vote():
             for vote in votes:
                 usrRoom = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.uuid == vote.uuid, UserRooms.accepted ==True).first() #conseguir gatchas
                 if usrRoom:
-                    usrRoom.gatchas = usrRoom.gatchas + vote.bet * result # gatchas - 1x bet 
-                    db.session.merge(usrRoom)
-                    db.session.commit()
-
-                    if usrRoom.gatchas < 0:
-                        temp =  UserStats.query.filter(UserStats.uuid == usrRoom.uuid).first()
-                        temp.total_games = temp.total_games + 1
-                        db.session.merge(temp)
-                        db.session.commit()
-                        deadPlayers += 1
-                        usrRoom.accepted = False #desuscribirlo
-
-                    db.session.merge(usrRoom)
-                    db.session.commit()
-
                     print(f"Vote {vote.vote}")
                     result = voteResult(rng, vote.vote)
                     if result > 0:
                         usrStat = UserStats.query.filter(UserStats.uuid == vote.uuid).first()
                         usrStat.bet_wins = usrStat.bet_wins + 1 # add bet wins
                         db.session.merge(usrStat)
-                        db.session.commit()
+                        #db.session.commit()
 
-                    
+                    usrRoom.gatchas = usrRoom.gatchas + vote.bet * result # gatchas - 1x bet 
+                    if usrRoom.gatchas < 0:
+                        usrRoom.accepted = False #desuscribirlo
+                        temp =  UserStats.query.filter(UserStats.uuid == usrRoom.uuid).first()
+                        temp.total_games = temp.total_games + 1
+                        db.session.merge(temp)
+                        #db.session.commit()
+                        deadPlayers += 1
+
+                    db.session.merge(usrRoom)
+                    db.session.commit()
             #se calcularon los gactchas de cada jugador de esta ronda
-            tempRoom = Rooms.query.filter(Rooms.roomName == roomName).first()
-            tempRoom.maxPlayers = tempRoom.maxPlayers - deadPlayers # se resta los jugadores muertos
-            tempRoom.last_result = rng
+            room.maxPlayers = room.maxPlayers - deadPlayers # se resta los jugadores muertos
+            room.last_result = rng
 
-            if tempRoom.rounds == tempRoom.curr_round: #se llego al ultimo round
-                tempRoom.voting = False #cerrar votaciones
-                db.session.merge(tempRoom)
-                db.session.commit()
-
+            if room.rounds == room.curr_round: #se llego al ultimo round
                 usrRooms = UserRooms.query.filter(UserRooms.roomName == roomName, UserRooms.accepted ==True).all()
                 for usr in usrRooms:
                     usrStat = UserStats.query.filter(UserStats.uuid == usr.uuid).first()
@@ -482,14 +472,18 @@ def vote():
                     if usrStat.maxGatcha < usr.gatchas:
                         usrStat.maxGatcha = usr.gatchas #INC MAX GATCHA
                     db.session.merge(usrStat)
-                    db.session.commit()
+                    #db.session.commit()
             
                 #sumar victory points = cantidad gatchas y total games, max gatcha
                 
+                
+                room.voting = False #cerrar votaciones
+                
             else:
-                tempRoom.curr_round = tempRoom.curr_round + 1 #aumentar current round por 1
-                db.session.merge(tempRoom)
-                db.session.commit()
+                room.curr_round = room.curr_round + 1 #aumentar current round por 1
+                
+            db.session.merge(room)
+            db.session.commit()
 
         return jsonify({"msg":"Voted successfully", 'status': True}), 200 #SUCCESS
     
